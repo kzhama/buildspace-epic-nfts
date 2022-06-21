@@ -8,11 +8,12 @@ import { CONTRACT_ADDRESS } from "./contract";
 
 const TWITTER_HANDLE = '_buildspace';
 const TWITTER_LINK = `https://twitter.com/${TWITTER_HANDLE}`;
-const OPENSEA_LINK = '';
-const TOTAL_MINT_COUNT = 50;
+const TOTAL_MINT_COUNT = 20;
 
 const App = () => {
 	const [currentAccount, setCurrentAccount] = useState("");
+	const [mintedNFTs, setMintedNFTs] = useState(0);
+	const [connectedContract, setConnectedContract] = useState();
 
 	const checkIfWalletIsConnected = async () => {
 		const { ethereum } = window;
@@ -45,6 +46,18 @@ const App = () => {
 				return;
 			}
 
+			let chainId = await ethereum.request({ method: 'eth_chainId' });
+			console.log("Connected to chain " + chainId);
+			
+			// String, hex code of the chainId of the Rinkebey test network
+			const goerliChainID = "0x5"; 
+			if (chainId !== goerliChainID) {
+				await ethereum.request({
+				  method: 'wallet_switchEthereumChain',
+				  params: [{ chainId: '0x5' }], // chainId must be in hexadecimal numbers
+				});
+			}
+			
 			const accounts = await ethereum.request({ method: "eth_requestAccounts" });
 
 			console.log("Connected", accounts[0]);
@@ -80,22 +93,33 @@ const App = () => {
 		}
 	}
 
+	const onNewNFTMint = (from, tokenId) => {
+		console.log(from, tokenId.toNumber())
+		getMintedNftsAmount()
+		alert(`Hey there! We've minted your NFT. It may be blank right now. It can take a max of 10 min to show up on OpenSea. Here's the link: <https://testnets.opensea.io/assets/${CONTRACT_ADDRESS}/${tokenId.toNumber()}>`)
+	}
+
+	const getMintedNftsAmount = async () => {
+		const nftsMinted = await connectedContract.getNFTsMinted()
+		setMintedNFTs(nftsMinted.toString())
+	}
+
 	useEffect(() => {
 		checkIfWalletIsConnected();
-
-		let connectedContract;
-
-		const onNewNFTMint = (from, tokenId) => {
-			console.log(from, tokenId.toNumber())
-			alert(`Hey there! We've minted your NFT. It may be blank right now. It can take a max of 10 min to show up on OpenSea. Here's the link: <https://testnets.opensea.io/assets/${CONTRACT_ADDRESS}/${tokenId.toNumber()}>`)
-		}
-
 
 		if (window.ethereum) {
 			const provider = new ethers.providers.Web3Provider(window.ethereum);
 			const signer = provider.getSigner();
 
-			connectedContract = new ethers.Contract(CONTRACT_ADDRESS, abi, signer);
+			setConnectedContract(new ethers.Contract(CONTRACT_ADDRESS, abi, signer));
+		}
+	}, [])
+
+
+	useEffect(() => {
+
+		if (connectedContract) {
+			getMintedNftsAmount()
 			connectedContract.on("NewEpicNFTMinted", onNewNFTMint);
 		}
 
@@ -103,8 +127,9 @@ const App = () => {
 			if (connectedContract) {
 				connectedContract.off("NewEpicNFTMinted", onNewNFTMint);
 			}
-		};
-	}, [])
+		}
+	}, [connectedContract])
+
 
 	return (
 		<div className="App">
@@ -114,6 +139,9 @@ const App = () => {
 					<p className="sub-text">
 						Each unique. Each beautiful. Discover your NFT today.
           			</p>
+					<p className="minted-nfts-text">
+						{mintedNFTs}/{TOTAL_MINT_COUNT}
+					</p>
 					{currentAccount === "" ? (
 						<button onClick={connectWallet} className="cta-button connect-wallet-button">
 							Connect to Wallet
